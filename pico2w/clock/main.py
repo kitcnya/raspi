@@ -1,7 +1,9 @@
 # -*- coding: utf-8-unix -*-
 import os
 import sys
-import machine, time
+import math
+import time
+import machine
 
 from logging import basicConfig, WARNING, INFO, DEBUG
 logfile = 'main.log'
@@ -16,17 +18,34 @@ logger = getLogger(__name__)
 logger.warning('starting up')
 
 class task(object):
+    measures = 100
+    measures1 = measures - 1
+    taskid = 0
     def __init__(self, main):
         self._main = main
         self._start = main.start
         self._end = main.start
         self._alarm = main.start
+        self._cputime = 0
+        self._cputime_mean = 0
+        self._cputime_mean_square = 0
+        self._cputime_m = 0
+        self._taskid = task.taskid
+        task.taskid += 1
     def invoke(self):
         self._start = self._main.ticks()
         self._invoke()
         self._end = self._main.ticks()
         self._cputime = time.ticks_diff(self._end, self._start)
-        logger.debug('cputime: %s %s' % (self.__class__.__name__, self._cputime))
+        self._cputime_mean = (self._cputime_mean * task.measures1 + self._cputime) / task.measures
+        self._cputime_mean_square = (self._cputime_mean_square * task.measures1 + self._cputime * self._cputime) / task.measures
+        s2 = self._cputime_mean_square - self._cputime_mean * self._cputime_mean
+        x = self._cputime_m - self._cputime_mean
+        x = x * x
+        if x < s2:
+            return
+        self._cputime_m = self._cputime_mean
+        logger.warning('cputime: %s[%s] %s %0.1f' % (self.__class__.__name__, self._taskid, self._cputime, self._cputime_m))
     def _invoke(self):
         pass
     def set_alarm(self, task, after):
