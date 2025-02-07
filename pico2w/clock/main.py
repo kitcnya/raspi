@@ -47,23 +47,23 @@ class task(object):
         self._end = self.main.ticks()
         self.cputime = time.ticks_diff(self._end, self._start)
 
-        self.delaytime_mean = (self.delaytime_mean * task.measures1 + self.delaytime) / task.measures
-        self.delaytime_mean_square = (self.delaytime_mean_square * task.measures1 + self.delaytime * self.delaytime) / task.measures
+        self.delaytime_mean = (self.delaytime_mean * task.measures1 + self.delaytime) // task.measures
+        self.delaytime_mean_square = (self.delaytime_mean_square * task.measures1 + self.delaytime * self.delaytime) // task.measures
         s2 = self.delaytime_mean_square - self.delaytime_mean * self.delaytime_mean
         x = self.delaytime_level - self.delaytime_mean
         x = x * x
         if x > s2:
             self.delaytime_level = self.delaytime_mean
-            logger.warning('delaytime: %s[%s] %s %0.1f' % (self.__class__.__name__, self.taskid, self.delaytime, self.delaytime_level))
+            logger.warning('delaytime: %s[%s] %s %s' % (self.__class__.__name__, self.taskid, self.delaytime, self.delaytime_level))
 
-        self.cputime_mean = (self.cputime_mean * task.measures1 + self.cputime) / task.measures
-        self.cputime_mean_square = (self.cputime_mean_square * task.measures1 + self.cputime * self.cputime) / task.measures
+        self.cputime_mean = (self.cputime_mean * task.measures1 + self.cputime) // task.measures
+        self.cputime_mean_square = (self.cputime_mean_square * task.measures1 + self.cputime * self.cputime) // task.measures
         s2 = self.cputime_mean_square - self.cputime_mean * self.cputime_mean
         x = self.cputime_level - self.cputime_mean
         x = x * x
         if x > s2:
             self.cputime_level = self.cputime_mean
-            logger.warning('cputime: %s[%s] %s %0.1f' % (self.__class__.__name__, self.taskid, self.cputime, self.cputime_level))
+            logger.warning('cputime: %s[%s] %s %s' % (self.__class__.__name__, self.taskid, self.cputime, self.cputime_level))
 
     def task(self):
         pass
