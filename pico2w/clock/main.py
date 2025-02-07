@@ -23,9 +23,10 @@ class task(object):
     taskid = 0
     def __init__(self, main):
         self.main = main
-        self._start = main.start
-        self._end = main.start
-        self._alarm = main.start
+        self._start = main._start
+        self._end = main._start
+        self._alarm = main._start
+        self._trigger = main._start
         self.cputime = 0
         self.cputime_mean = 0
         self.cputime_mean_square = 0
@@ -55,7 +56,7 @@ class task(object):
 class mainloop(object):
     def __init__(self):
         self.tasks = list()
-        self.start = self.ticks()
+        self._start = self.ticks()
         self.init()
     def init(self):
         pass
@@ -71,9 +72,9 @@ class mainloop(object):
         runnable = list()
         maxtrigger = 0
         self.tasks = list()
-        self.start = self.ticks()
+        self._start = self.ticks()
         for task in queue:
-            task._trigger = time.ticks_diff(self.start, task._alarm)
+            task._trigger = time.ticks_diff(self._start, task._alarm)
             if task._trigger < 0:
                 self.append(task)
             else:
