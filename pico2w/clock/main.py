@@ -18,55 +18,80 @@ logger = getLogger(__name__)
 logger.warning('starting up')
 
 class task(object):
+
     measures = 100
     measures1 = measures - 1
     taskid = 0
+
     def __init__(self, main):
+        self.taskid = task.taskid
+        task.taskid += 1
         self.main = main
+        self._trigger = main._start
+        self._alarm = main._start
         self._start = main._start
         self._end = main._start
-        self._alarm = main._start
-        self._trigger = main._start
+        self.delaytime = 0
+        self.delaytime_mean = 0
+        self.delaytime_mean_square = 0
+        self.delaytime_level = 0
         self.cputime = 0
         self.cputime_mean = 0
         self.cputime_mean_square = 0
         self.cputime_level = 0
-        self.taskid = task.taskid
-        task.taskid += 1
+
     def invoke(self):
         self._start = self.main.ticks()
+        self.delaytime = time.ticks_diff(self._start, self._alarm)
         self.task()
         self._end = self.main.ticks()
         self.cputime = time.ticks_diff(self._end, self._start)
+
+        self.delaytime_mean = (self.delaytime_mean * task.measures1 + self.delaytime) / task.measures
+        self.delaytime_mean_square = (self.delaytime_mean_square * task.measures1 + self.delaytime * self.delaytime) / task.measures
+        s2 = self.delaytime_mean_square - self.delaytime_mean * self.delaytime_mean
+        x = self.delaytime_level - self.delaytime_mean
+        x = x * x
+        if x > s2:
+            self.delaytime_level = self.delaytime_mean
+            logger.warning('delaytime: %s[%s] %s %0.1f' % (self.__class__.__name__, self.taskid, self.delaytime, self.delaytime_level))
+
         self.cputime_mean = (self.cputime_mean * task.measures1 + self.cputime) / task.measures
         self.cputime_mean_square = (self.cputime_mean_square * task.measures1 + self.cputime * self.cputime) / task.measures
         s2 = self.cputime_mean_square - self.cputime_mean * self.cputime_mean
         x = self.cputime_level - self.cputime_mean
         x = x * x
-        if x < s2:
-            return
-        self.cputime_level = self.cputime_mean
-        logger.warning('cputime: %s[%s] %s %0.1f' % (self.__class__.__name__, self.taskid, self.cputime, self.cputime_level))
+        if x > s2:
+            self.cputime_level = self.cputime_mean
+            logger.warning('cputime: %s[%s] %s %0.1f' % (self.__class__.__name__, self.taskid, self.cputime, self.cputime_level))
+
     def task(self):
         pass
+
     def set_alarm(self, task, after):
         self._alarm = time.ticks_add(task._alarm, after)
         self.main.append(self)
 
 class mainloop(object):
+
     def __init__(self):
         self.tasks = list()
         self._start = self.ticks()
         self.init()
+
     def init(self):
         pass
+
     def append(self, task):
         self.tasks.append(task)
+
     def ticks(self):
         return time.ticks_us()
+
     def run(self):
         while True:
             self.dispatch()
+
     def dispatch(self):
         queue = self.tasks
         runnable = list()
