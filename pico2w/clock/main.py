@@ -22,42 +22,42 @@ class task(object):
     measures1 = measures - 1
     taskid = 0
     def __init__(self, main):
-        self._main = main
+        self.main = main
         self._start = main.start
         self._end = main.start
         self._alarm = main.start
-        self._cputime = 0
-        self._cputime_mean = 0
-        self._cputime_mean_square = 0
-        self._cputime_m = 0
-        self._taskid = task.taskid
+        self.cputime = 0
+        self.cputime_mean = 0
+        self.cputime_mean_square = 0
+        self.cputime_level = 0
+        self.taskid = task.taskid
         task.taskid += 1
     def invoke(self):
-        self._start = self._main.ticks()
-        self._invoke()
-        self._end = self._main.ticks()
-        self._cputime = time.ticks_diff(self._end, self._start)
-        self._cputime_mean = (self._cputime_mean * task.measures1 + self._cputime) / task.measures
-        self._cputime_mean_square = (self._cputime_mean_square * task.measures1 + self._cputime * self._cputime) / task.measures
-        s2 = self._cputime_mean_square - self._cputime_mean * self._cputime_mean
-        x = self._cputime_m - self._cputime_mean
+        self._start = self.main.ticks()
+        self.task()
+        self._end = self.main.ticks()
+        self.cputime = time.ticks_diff(self._end, self._start)
+        self.cputime_mean = (self.cputime_mean * task.measures1 + self.cputime) / task.measures
+        self.cputime_mean_square = (self.cputime_mean_square * task.measures1 + self.cputime * self.cputime) / task.measures
+        s2 = self.cputime_mean_square - self.cputime_mean * self.cputime_mean
+        x = self.cputime_level - self.cputime_mean
         x = x * x
         if x < s2:
             return
-        self._cputime_m = self._cputime_mean
-        logger.warning('cputime: %s[%s] %s %0.1f' % (self.__class__.__name__, self._taskid, self._cputime, self._cputime_m))
-    def _invoke(self):
+        self.cputime_level = self.cputime_mean
+        logger.warning('cputime: %s[%s] %s %0.1f' % (self.__class__.__name__, self.taskid, self.cputime, self.cputime_level))
+    def task(self):
         pass
     def set_alarm(self, task, after):
         self._alarm = time.ticks_add(task._alarm, after)
-        self._main.append(self)
+        self.main.append(self)
 
 class mainloop(object):
     def __init__(self):
         self.tasks = list()
         self.start = self.ticks()
-        self._init()
-    def _init(self):
+        self.init()
+    def init(self):
         pass
     def append(self, task):
         self.tasks.append(task)
@@ -94,17 +94,17 @@ class mainloop(object):
                 runnable.append(task)
 
 class led_on(task):
-    def _invoke(self):
-        self._main.led.value(1)
-        self._main.off.set_alarm(self, 50000)
+    def task(self):
+        self.main.led.value(1)
+        self.main.off.set_alarm(self, 50000)
         self.set_alarm(self, 1000000)
 
 class led_off(task):
-    def _invoke(self):
-        self._main.led.value(0)
+    def task(self):
+        self.main.led.value(0)
 
 class main(mainloop):
-    def _init(self):
+    def init(self):
         self.led = machine.Pin("LED", machine.Pin.OUT)
         self.on = led_on(self)
         self.off = led_off(self)
