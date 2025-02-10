@@ -49,6 +49,9 @@ class task(object):
         self._alarm = time.ticks_add(task._alarm, after)
         self.sequencer.append(self)
 
+    def set_time(self, adjust = 0):
+        self._alarm = time.ticks_add(self.sequencer.ticks(), adjust)
+
 class sequencer(object):
 
     def __init__(self):
