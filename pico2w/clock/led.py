@@ -63,3 +63,16 @@ class morse(task):
     def task(self):
         for obj, next in self.codes:
             obj.set_alarm(self, next)
+
+class morse_demo1(sequencer):
+
+    def init(self):
+        self.led = led()
+        self.led.on()
+        off = led_off(self)
+        off.set_alarm(off, 5000000)
+        msg = morse(self)
+        msg.set_alarm(msg, 6000000)
+        #         k   i  t c    n  y    a  1
+        msg.tone('-.- .. - -.-. -. -.-- .-/.----///=')
+        logger.info('msg length: %s' % msg.next)

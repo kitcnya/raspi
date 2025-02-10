@@ -17,23 +17,12 @@ basicConfig(filename = logfile, filemode = 'a', format = logformat, level = INFO
 from logging import getLogger
 logger = getLogger(__name__)
 
-class main(sequencer):
-
-    def init(self):
-        self.led = led()
-        self.led.on()
-        off = led_off(self)
-        off.set_alarm(off, 5000000)
-        msg = morse(self)
-        msg.set_alarm(msg, 6000000)
-        #         k   i  t c    n  y    a  1
-        msg.tone('-.- .. - -.-. -. -.-- .-/.----///=')
-        #msg.tone('...,---,...///=')
-        logger.info('msg length: %s' % msg.next)
+def main():
+    morse_demo1().run()
 
 logger.warning('starting up')
 try:
-    main().run()
+    main()
     logger.critical('mainloop exit.')
 except Exception as e:
     logger.critical('%s: %s' % (e.__class__.__name__, e.value))
