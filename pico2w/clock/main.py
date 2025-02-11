@@ -31,6 +31,23 @@ def main():
     s.run()
     logger.info('led ok')
 
+    try:
+        with open('rtc.json') as t:
+            st = json.load(t)
+        year = st['year']
+        month = st['month']
+        day = st['day']
+        weekday = st['weekday']
+        hour = st['hour']
+        minute = st['minute']
+        second = st['second']
+        subsecond = st['subsecond']
+        rtc = machine.RTC()
+        rtc.datetime((year, month, day, weekday, hour, minute, second, subsecond))
+        logger.warning('rtc.json: %d-%02d-%02d %02d:%02d:%02d' % (year, month, day, hour, minute, second))
+    except Exception as e:
+        logger.error('%s: %s' % (e.__class__.__name__, e.value))
+
     with open('profile.json') as f:
         profile = json.load(f)
 

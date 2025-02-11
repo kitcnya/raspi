@@ -5,6 +5,8 @@ import sys
 import re
 import argparse
 import subprocess as sp
+import datetime
+import json
 
 def main():
     parser = argparse.ArgumentParser()
@@ -16,7 +18,19 @@ def main():
         raise ValueError('No directory: %s' % directory)
     os.chdir(directory)
 
-    sp.run(['mpremote', 'rtc', '--set'])
+    now = datetime.datetime.now()
+    st = {
+        'year': now.year,
+        'month': now.month,
+        'day': now.day,
+        'hour': now.hour,
+        'minute': now.minute,
+        'second': now.second,
+        'subsecond': 0,
+        'weekday': 0
+    }
+    with open('rtc.json', 'w') as t:
+        t.write(json.dumps(st))
 
     cmd = sp.run(['mpremote', 'fs', 'ls'], stdout = sp.PIPE)
     coding = 'utf-8'
