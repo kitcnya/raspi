@@ -83,7 +83,13 @@ def main():
     data = struct.unpack('!12I', answer)
     for x in data:
         logger.info('recv: %08x (%d)' % (x, x))
-    logger.info('trip-around: %s %s' % (start, end))
+    logger.info('trip-around: %s %s %s' % (start, end, time.ticks_diff(end, start)))
+    ntptime = data[10] # transmit sec on server
+    epoch = ntptime - 2208988800
+    if time.gmtime(0)[0] == 2000:
+        epoch -= 946684800
+    (year, month, mday, hour, minute, second, weekday, yearday) = time.gmtime(epoch)
+    logger.info('%d-%02d-%02d %02d:%02d:%02d' % (year, month, mday, hour, minute, second))
 
     ok = morse(s)
     ok.tone('///--- -.-/...- .-///') # OK VA
