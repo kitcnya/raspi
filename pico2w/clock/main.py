@@ -6,6 +6,8 @@
 import gc
 import time
 import json
+import socket as so
+import struct
 from task import *
 from led import *
 
@@ -70,6 +72,18 @@ def main():
 
     logger.info('wlan connected')
     logger.info(str(wlan.ifconfig()))
+
+    ntp = so.getaddrinfo(profile['ntp']['server'], 123)[0][-1]
+    sock = so.socket(so.AF_INET, so.SOCK_DGRAM, 0)
+    request = b'\x23' + 47 * b'\0'
+    start = time.ticks_us()
+    sock.sendto(request, ntp)
+    answer, src = sock.recvfrom(64)
+    end = time.ticks_us()
+    data = struct.unpack('!12I', answer)
+    for x in data:
+        logger.info('recv: %08x (%d)' % (x, x))
+    logger.info('trip-around: %s %s' % (start, end))
 
     ok = morse(s)
     ok.tone('///--- -.-/...- .-///') # OK VA
