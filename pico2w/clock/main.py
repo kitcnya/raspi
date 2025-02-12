@@ -21,6 +21,29 @@ basicConfig(filename = logfile, filemode = 'a', format = logformat, level = INFO
 from logging import getLogger
 logger = getLogger(__name__)
 
+class ntpget(object):
+
+    def __init__(self, server):
+        self.server = server
+        self.ntpserver = so.getaddrinfo(self.server, 123)[0][-1]
+        self.sock = so.socket(so.AF_INET, so.SOCK_DGRAM, 0)
+        self.request = b'\x23' + 47 * b'\0'
+
+    def get(self):
+        start = time.ticks_us()
+        self.sock.sendto(self.request, self.ntpserver)
+        answer, src = self.sock.recvfrom(64)
+        end = time.ticks_us()
+        data = struct.unpack('!12I', answer)
+        ntptime = data[10] # transmit timestamp (sec) on server
+        if ntptime < 2147483648:
+            ntptime += 2147483648 # ntp era 1 (beyond 7-Feb-2036 06:28:16)
+        else:
+            ntptime -= 2147483648 # ntp era 0 (since 20-Jan-1968 03:14:08)
+        epoch = ntptime - 61505152
+        ticks = time.ticks_add(start, time.ticks_diff(end, start) // 2)
+        return ticks, epoch, data[11]
+
 def main():
     #morse_demo1().run()
     s = sequencer()
@@ -73,30 +96,37 @@ def main():
     logger.info('wlan connected')
     logger.info(str(wlan.ifconfig()))
 
-    ntp = so.getaddrinfo(profile['ntp']['server'], 123)[0][-1]
-    sock = so.socket(so.AF_INET, so.SOCK_DGRAM, 0)
-    request = b'\x23' + 47 * b'\0'
-    start = time.ticks_us()
-    sock.sendto(request, ntp)
-    answer, src = sock.recvfrom(64)
-    end = time.ticks_us()
-    data = struct.unpack('!12I', answer)
-    for x in data:
-        logger.info('recv: %08x (%d)' % (x, x))
-    logger.info('trip-around: %s %s %s' % (start, end, time.ticks_diff(end, start)))
-    ntptime = data[10] # transmit sec on server
-    epoch = ntptime - 2208988800
-    if time.gmtime(0)[0] == 2000:
-        epoch -= 946684800
-    (year, month, mday, hour, minute, second, weekday, yearday) = time.gmtime(epoch)
-    logger.info('%d-%02d-%02d %02d:%02d:%02d' % (year, month, mday, hour, minute, second))
+    ntp = ntpget(profile['ntp']['server'])
 
     ok = morse(s)
     ok.tone('///--- -.-/...- .-///') # OK VA
-    gc.collect() # force gc
-    ok.set_time()
-    ok.task()
-    s.run()
+
+    while True:
+        gc.collect() # force gc
+        op.set_time()
+        op.task()
+        s.run()
+
+        logger.info('start: %s' % (time.ticks_ms()))
+
+        (ticks, epoch, frac) = ntp.get()
+        epoch += 9 * 3600 # UTC->JST
+        (year, month, mday, hour, minute, second, weekday, yearday) = time.gmtime(epoch)
+        logger.info('ntptime: %d-%02d-%02d %02d:%02d:%02d' % (year, month, mday, hour, minute, second))
+
+        logger.info('rtc set: %s' % (time.ticks_ms()))
+
+        rtc.datetime((year, month, mday, 0, hour, minute, second, 0))
+        (year, month, day, weekday, hour, minute, second, subsecond) = rtc.datetime()
+        logger.info('rtc: %d-%02d-%02d %02d:%02d:%02d' % (year, month, day, hour, minute, second))
+
+        logger.info('end: %s' % (time.ticks_ms()))
+
+        gc.collect() # force gc
+        ok.set_time()
+        ok.task()
+        s.run()
+        time.sleep(3600)
 
     wlan.disconnect()
     logger.info('wlan disconnected')
