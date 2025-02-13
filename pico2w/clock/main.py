@@ -27,12 +27,17 @@ class ntpget(object):
         self.server = server
         self.ntpserver = so.getaddrinfo(self.server, 123)[0][-1]
         self.sock = so.socket(so.AF_INET, so.SOCK_DGRAM, 0)
+        self.sock.settimeout(0.5)
         self.request = b'\x23' + 47 * b'\0'
 
     def get(self):
         start = time.ticks_us()
         self.sock.sendto(self.request, self.ntpserver)
-        answer, src = self.sock.recvfrom(64)
+        try:
+            answer, src = self.sock.recvfrom(64)
+        except Exception as e:
+            logger.error('%s: %s' % (e.__class__.__name__, e.value))
+            return start, 0, 0
         end = time.ticks_us()
         data = struct.unpack('!12I', answer)
         ntptime = data[10] # transmit timestamp (sec) on server
@@ -110,23 +115,24 @@ def main():
         logger.info('start: %s' % (time.ticks_ms()))
 
         (ticks, epoch, frac) = ntp.get()
-        epoch += 9 * 3600 # UTC->JST
-        (year, month, mday, hour, minute, second, weekday, yearday) = time.gmtime(epoch)
-        logger.info('ntptime: %d-%02d-%02d %02d:%02d:%02d' % (year, month, mday, hour, minute, second))
+        if epoch != 0:
+            epoch += 9 * 3600 # UTC->JST
+            (year, month, mday, hour, minute, second, weekday, yearday) = time.gmtime(epoch)
+            logger.info('ntptime: %d-%02d-%02d %02d:%02d:%02d' % (year, month, mday, hour, minute, second))
 
-        logger.info('rtc set: %s' % (time.ticks_ms()))
+            logger.info('rtc set: %s' % (time.ticks_ms()))
 
-        rtc.datetime((year, month, mday, 0, hour, minute, second, 0))
-        (year, month, day, weekday, hour, minute, second, subsecond) = rtc.datetime()
-        logger.info('rtc: %d-%02d-%02d %02d:%02d:%02d' % (year, month, day, hour, minute, second))
+            rtc.datetime((year, month, mday, 0, hour, minute, second, 0))
+            (year, month, day, weekday, hour, minute, second, subsecond) = rtc.datetime()
+            logger.info('rtc: %d-%02d-%02d %02d:%02d:%02d' % (year, month, day, hour, minute, second))
 
-        logger.info('end: %s' % (time.ticks_ms()))
+            logger.info('end: %s' % (time.ticks_ms()))
 
         gc.collect() # force gc
         ok.set_time()
         ok.task()
         s.run()
-        time.sleep(3600)
+        time.sleep(600)
 
     wlan.disconnect()
     logger.info('wlan disconnected')
