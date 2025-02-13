@@ -8,6 +8,7 @@ import time
 import json
 import socket as so
 import struct
+import network
 from task import *
 from led import *
 
@@ -37,7 +38,7 @@ class ntpget(object):
             answer, src = self.sock.recvfrom(64)
         except Exception as e:
             logger.error('%s: %s' % (e.__class__.__name__, e.value))
-            return start, 0, 0
+            return 0, start
         end = time.ticks_us()
         data = struct.unpack('!12I', answer)
         ntptime = data[10] # transmit timestamp (sec) on server
@@ -47,7 +48,9 @@ class ntpget(object):
             ntptime -= 2147483648 # ntp era 0 (since 20-Jan-1968 03:14:08)
         epoch = ntptime - 61505152
         ticks = time.ticks_add(start, time.ticks_diff(end, start) // 2)
-        return ticks, epoch, data[11]
+        usec = data[11] // 4295 # convert transmit timestamp (frac) on server into usec
+        ticks -= usec # adjust machine ticks suit to be epoch
+        return epoch, ticks
 
 def main():
     #morse_demo1().run()
@@ -83,7 +86,6 @@ def main():
 
     logger.info(str(profile))
 
-    import network
     wlan = network.WLAN(network.STA_IF)
     wlan.active(True)
     wlan.connect(profile['wlan']['ssid'], profile['wlan']['pass'])
@@ -112,27 +114,21 @@ def main():
         op.task()
         s.run()
 
-        logger.info('start: %s' % (time.ticks_ms()))
-
-        (ticks, epoch, frac) = ntp.get()
+        (epoch, ticks) = ntp.get()
         if epoch != 0:
             epoch += 9 * 3600 # UTC->JST
-            (year, month, mday, hour, minute, second, weekday, yearday) = time.gmtime(epoch)
-            logger.info('ntptime: %d-%02d-%02d %02d:%02d:%02d' % (year, month, mday, hour, minute, second))
-
-            logger.info('rtc set: %s' % (time.ticks_ms()))
-
-            rtc.datetime((year, month, mday, 0, hour, minute, second, 0))
-            (year, month, day, weekday, hour, minute, second, subsecond) = rtc.datetime()
-            logger.info('rtc: %d-%02d-%02d %02d:%02d:%02d' % (year, month, day, hour, minute, second))
-
-            logger.info('end: %s' % (time.ticks_ms()))
+            (year, month, day, hour, minute, second, weekday, yearday) = time.gmtime(epoch + 1) # XXX: w/ adjust
+            rtc.datetime((year, month, day, 0, hour, minute, second, 0))
+            rticks = time.ticks_us()
+            (ryear, rmonth, rday, weekday, rhour, rminute, rsecond, subsecond) = rtc.datetime()
+            logger.info('ntp: %d-%02d-%02d %02d:%02d:%02d (%s)' % (year, month, day, hour, minute, second, ticks))
+            logger.info('rtc: %d-%02d-%02d %02d:%02d:%02d (%s)' % (ryear, rmonth, rday, rhour, rminute, rsecond, rticks))
 
         gc.collect() # force gc
         ok.set_time()
         ok.task()
         s.run()
-        time.sleep(600)
+        time.sleep(360)
 
     wlan.disconnect()
     logger.info('wlan disconnected')
@@ -143,3 +139,4 @@ try:
     logger.critical('mainloop exit.')
 except Exception as e:
     logger.critical('%s: %s' % (e.__class__.__name__, e.value))
+    led().on()
