@@ -24,13 +24,14 @@ logger = getLogger(__name__)
 
 class ntpget(object):
 
-    def __init__(self, server):
+    def __init__(self, server, timeout = 0.5):
         self.ntpserver = so.getaddrinfo(server, 123)[0][-1]
+        self.timeout = timeout
         self.request = b'\x23' + 47 * b'\0'
 
     def get(self):
         sock = so.socket(so.AF_INET, so.SOCK_DGRAM, 0)
-        sock.settimeout(0.5)
+        sock.settimeout(self.timeout)
         start = time.ticks_us()
         try:
             sock.sendto(self.request, self.ntpserver)
@@ -86,11 +87,8 @@ def wlan_init(s, profile):
     wlan = network.WLAN(network.STA_IF)
     wlan.active(True)
     wlan.connect(profile['wlan']['ssid'], profile['wlan']['pass'])
+    # connect would processed in the background...
     while not wlan.isconnected() and wlan.status() >= 0:
-        s.led.on()
-        time.sleep(0.2)
-        s.led.off()
-        time.sleep(0.2)
         s.led.on()
         time.sleep(0.2)
         s.led.off()
@@ -100,27 +98,47 @@ def wlan_init(s, profile):
     return wlan
 
 def ntp_init(s, profile):
+    w1 = morse(s)
+    w1.tone('-. ---/-. - .--./... . .-. ...- . .-.///') # no ntp server
     n = 0
     try:
-        ntp = ntpget(profile['ntp']['server'])
-        (epoch, ticks) = ntp.get()
+        ntp = ntpget(profile['ntp']['server'], profile['ntp']['timeout'])
     except Exception as e:
         logger.error('%s: %s (ntp)' % (e.__class__.__name__, e.value))
+        ntp = None
+    while ntp is None:
+        n += 1
+        if n >= 10:
+            raise RuntimeError('no ntp server')
+        gc.collect()
+        w1.set_time()
+        w1.task()
+        s.run()
+        try:
+            ntp = ntpget(profile['ntp']['server'], profile['ntp']['timeout'])
+        except Exception as e:
+            logger.error('%s: %s (ntp)' % (e.__class__.__name__, e.value))
+            ntp = None
+    w2 = morse(s)
+    w2.tone('-. - .--./--. . -/- .. -- .///') # ntp get time
+    n = 0
+    try:
+        (epoch, ticks) = ntp.get()
+    except Exception as e:
+        logger.error('%s: %s (ntp.get)' % (e.__class__.__name__, e.value))
         epoch = 0
     while epoch == 0:
         n += 1
         if n >= 10:
             raise RuntimeError('no response from ntp server')
-        for i in range(40):
-            s.led.on()
-            time.sleep(1)
-            s.led.off()
-            time.sleep(0.5)
+        gc.collect()
+        w2.set_time()
+        w2.task()
+        s.run()
         try:
-            ntp = ntpget(profile['ntp']['server'])
             (epoch, ticks) = ntp.get()
         except Exception as e:
-            logger.error('%s: %s (ntp)' % (e.__class__.__name__, e.value))
+            logger.error('%s: %s (ntp.get)' % (e.__class__.__name__, e.value))
             epoch = 0
     rtc_set(epoch + 1) # XXX: w/ adjust
     return ntp, epoch, ticks
@@ -160,16 +178,16 @@ class clock(task):
         self.sequencer.led.on()
         (year, month, day, hour, minute, second, weekday, yearday) = time.gmtime(self.epoch)
         if second == 0:
-            self.off.set_alarm(self, 150000)
-            self.on2.set_alarm(self, 300000)
-            self.off2.set_alarm(self, 450000)
+            self.off.set_alarm(self, 100000)
+            self.on2.set_alarm(self, 200000)
+            self.off2.set_alarm(self, 300000)
         else:
-            self.off.set_alarm(self, 300000)
+            self.off.set_alarm(self, 150000)
             if second == 2 and minute % 10 == 2:
                 self.ticks = self._alarm
-                self.ntp.set_alarm(self, 310000)
+                self.ntp.set_alarm(self, 160000)
             elif second == 59:
-                gc.collect() # force gc
+                gc.collect()
         self.epoch += 1
         self.set_alarm(self, 1000000)
 
