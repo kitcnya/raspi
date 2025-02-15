@@ -36,7 +36,7 @@ class ntpget(object):
             sock.sendto(self.request, self.ntpserver)
             answer, src = sock.recvfrom(64)
         except Exception as e:
-            logger.error('%s: %s' % (e.__class__.__name__, e.value))
+            logger.error('%s: %s (timeout?)' % (e.__class__.__name__, e.value))
             sock.close()
             return 0, start
         end = time.ticks_us()
@@ -67,7 +67,7 @@ def rtc_json():
         epoch += 9 * 3600 # UTC->JST
         rtc_set(epoch + 1) # XXX: w/ adjust
     except Exception as e:
-        logger.error('%s: %s' % (e.__class__.__name__, e.value))
+        logger.error('%s: %s (rtc.json)' % (e.__class__.__name__, e.value))
 
 def greeting(s):
     op = morse(s)
@@ -101,8 +101,12 @@ def wlan_init(s, profile):
 
 def ntp_init(s, profile):
     n = 0
-    ntp = ntpget(profile['ntp']['server'])
-    (epoch, ticks) = ntp.get()
+    try:
+        ntp = ntpget(profile['ntp']['server'])
+        (epoch, ticks) = ntp.get()
+    except Exception as e:
+        logger.error('%s: %s (ntp)' % (e.__class__.__name__, e.value))
+        epoch = 0
     while epoch == 0:
         n += 1
         if n >= 10:
@@ -112,14 +116,23 @@ def ntp_init(s, profile):
             time.sleep(1)
             s.led.off()
             time.sleep(0.5)
-        (epoch, ticks) = ntp.get()
+        try:
+            ntp = ntpget(profile['ntp']['server'])
+            (epoch, ticks) = ntp.get()
+        except Exception as e:
+            logger.error('%s: %s (ntp)' % (e.__class__.__name__, e.value))
+            epoch = 0
     rtc_set(epoch + 1) # XXX: w/ adjust
     return ntp, epoch, ticks
 
 class ntptask(task):
 
     def task(self):
-        (epoch, ticks) = self.sequencer.ntp.get()
+        try:
+            (epoch, ticks) = self.sequencer.ntp.get()
+        except Exception as e:
+            logger.error('%s: %s (ntp.get)' % (e.__class__.__name__, e.value))
+            epoch = 0
         if epoch == 0: return
         epoch += 1
         if epoch != self.sequencer.clock.epoch:
@@ -141,6 +154,7 @@ class clock(task):
         self.epoch += 2
         self.set_time(self.ticks)
         self.set_alarm(self, 2000000)
+        logger.info('clock will start afater two seconds.')
 
     def task(self):
         self.sequencer.led.on()
@@ -180,5 +194,5 @@ try:
     main()
     logger.critical('mainloop exit.')
 except Exception as e:
-    logger.critical('%s: %s' % (e.__class__.__name__, e.value))
+    logger.critical('%s: %s.' % (e.__class__.__name__, e.value))
 led().on()
