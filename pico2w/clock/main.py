@@ -120,6 +120,7 @@ class ntptask(task):
 
     def task(self):
         (epoch, ticks) = self.sequencer.ntp.get()
+        if epoch == 0: return
         epoch += 1
         if epoch != self.sequencer.clock.epoch:
             logger.warning('epoch: %s (internal) != %s (ntp)' % (self.sequencer.clock.epoch, epoch))
