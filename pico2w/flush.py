@@ -5,7 +5,7 @@ import sys
 import re
 import argparse
 import subprocess as sp
-import datetime
+import time
 import json
 
 def main():
@@ -18,16 +18,9 @@ def main():
         raise ValueError('No directory: %s' % directory)
     os.chdir(directory)
 
-    now = datetime.datetime.now()
+    epoch = int(time.time())
     st = {
-        'year': now.year,
-        'month': now.month,
-        'day': now.day,
-        'hour': now.hour,
-        'minute': now.minute,
-        'second': now.second,
-        'subsecond': 0,
-        'weekday': 0
+        'epoch': epoch
     }
     with open('rtc.json', 'w') as t:
         t.write(json.dumps(st))
