@@ -182,7 +182,7 @@ class clock(task):
             if second == 2 and minute % 10 == 2:
                 self.ticks = self._alarm
                 self.ntp.set_alarm(self, 160000)
-            elif second == 59:
+            elif second % 10 == 8:
                 gc.collect()
         self.epoch += 1
         self.set_alarm(self, 1000000)
