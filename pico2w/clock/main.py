@@ -123,6 +123,7 @@ def ntp_init(s):
             logger.error('%s: %s (ntp.get)' % (e.__class__.__name__, e.value))
             epoch = 0
     rtc_set(epoch + 1) # XXX: w/ adjust
+    logger.info('initial ntp server: %s' % str(ntp.ntpserver))
     return ntp, epoch, ticks
 
 class ntptask(task):
@@ -148,7 +149,7 @@ class ntptask(task):
             logger.warning('epoch: %s (internal) != %s (ntp)' % (self.sequencer.clock.epoch, epoch))
             self.sequencer.clock.epoch = epoch
         d = time.ticks_diff(ticks, self.sequencer.clock.ticks)
-        logger.warning('ticks: %s (internal - ntp)' % d)
+        logger.warning('ticks: %s (internal - ntp) %s' % (d, str(self.sequencer.ntp.ntpserver)))
         self.sequencer.clock.set_time(ticks, 1000000)
 
 class clock(task):
