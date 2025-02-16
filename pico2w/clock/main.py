@@ -6,11 +6,10 @@
 import gc
 import time
 import json
-import socket as so
-import struct
 import network
 from task import *
 from led import *
+from nettime import *
 
 from logging import basicConfig, WARNING, INFO, DEBUG
 logfile = 'main.log'
@@ -21,62 +20,6 @@ basicConfig(filename = logfile, filemode = 'a', format = logformat, level = INFO
 
 from logging import getLogger
 logger = getLogger(__name__)
-
-class ntpget(object):
-
-    def __init__(self, server, timeout = 0.5, timezone = 0):
-        self.ntpserver = so.getaddrinfo(server, 123)[0][-1]
-        self.timeout = timeout
-        self.timezone = timezone
-        self.request = b'\x23' + 47 * b'\0'
-
-    def get(self):
-        sock = so.socket(so.AF_INET, so.SOCK_DGRAM, 0)
-        sock.settimeout(self.timeout)
-        start = time.ticks_us()
-        try:
-            sock.sendto(self.request, self.ntpserver)
-            answer, src = sock.recvfrom(64)
-        except Exception as e:
-            logger.error('%s: %s (timeout?)' % (e.__class__.__name__, e.value))
-            sock.close()
-            return 0, start
-        end = time.ticks_us()
-        sock.close()
-        data = struct.unpack('!12I', answer)
-        ntptime = data[10] # transmit timestamp (sec) on server
-        if ntptime < 2147483648:
-            ntptime += 2147483648 # ntp era 1 (beyond 7-Feb-2036 06:28:16)
-        else:
-            ntptime -= 2147483648 # ntp era 0 (since 20-Jan-1968 03:14:08)
-        epoch = ntptime - 61505152
-        usec = data[11] // 4295 # convert transmit timestamp (frac) on server into usec
-        ticks = time.ticks_add(start, (time.ticks_diff(end, start) // 2) - usec)
-        epoch += self.timezone
-        return epoch, ticks
-
-def rtc_set(epoch): # localtime
-    (year, month, day, hour, minute, second, weekday, yearday) = time.gmtime(epoch)
-    rtc = machine.RTC()
-    rtc.datetime((year, month, day, 0, hour, minute, second, 0))
-    logger.warning('rtc: %d-%02d-%02d %02d:%02d:%02d' % (year, month, day, hour, minute, second))
-
-def rtc_json(s):
-    try:
-        with open('rtc.json') as t:
-            st = json.load(t)
-        epoch = st['epoch']
-        epoch += s.profile['tz']['seconds']
-        rtc_set(epoch + 1) # XXX: w/ adjust
-    except Exception as e:
-        logger.error('%s: %s (rtc.json)' % (e.__class__.__name__, e.value))
-
-def greeting(s):
-    op = morse(s)
-    op.tone('... - .- .-.- -///') # start
-    op.set_time()
-    op.task()
-    s.run()
 
 def get_profile(s):
     with open('profile.json') as f:
@@ -107,6 +50,29 @@ def get_profile(s):
     logger.info('timezone: %s seconds' % seconds)
     return profile
 
+def rtc_set(epoch): # localtime
+    (year, month, day, hour, minute, second, weekday, yearday) = time.gmtime(epoch)
+    rtc = machine.RTC()
+    rtc.datetime((year, month, day, 0, hour, minute, second, 0))
+    logger.warning('rtc: %d-%02d-%02d %02d:%02d:%02d' % (year, month, day, hour, minute, second))
+
+def rtc_json(s):
+    try:
+        with open('rtc.json') as t:
+            st = json.load(t)
+        epoch = st['epoch']
+        epoch += s.profile['tz']['seconds']
+        rtc_set(epoch + 1) # XXX: w/ adjust
+    except Exception as e:
+        logger.error('%s: %s (rtc.json)' % (e.__class__.__name__, e.value))
+
+def greeting(s):
+    op = morse(s)
+    op.tone('... - .- .-.- -///') # start
+    op.set_time()
+    op.task()
+    s.run()
+
 def wlan_init(s):
     wlan = network.WLAN(network.STA_IF)
     wlan.active(True)
@@ -129,9 +95,9 @@ def ntp_init(s):
     w1.tone('-. ---/-. - .--./... . .-. ...- . .-.///') # no ntp server
     n = 0
     try:
-        ntp = ntpget(server, timeout, timezone)
+        ntp = nettime(server, timeout, timezone)
     except Exception as e:
-        logger.error('%s: %s (ntp)' % (e.__class__.__name__, e.value))
+        logger.error('%s: %s (nettime)' % (e.__class__.__name__, e.value))
         ntp = None
     while ntp is None:
         n += 1
@@ -142,9 +108,9 @@ def ntp_init(s):
         w1.task()
         s.run()
         try:
-            ntp = ntpget(server, timeout, timezone)
+            ntp = nettime(server, timeout, timezone)
         except Exception as e:
-            logger.error('%s: %s (ntp)' % (e.__class__.__name__, e.value))
+            logger.error('%s: %s (nettime)' % (e.__class__.__name__, e.value))
             ntp = None
     w2 = morse(s)
     w2.tone('-. - .--./--. . -/- .. -- .///') # ntp get time
