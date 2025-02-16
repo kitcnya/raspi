@@ -78,15 +78,13 @@ def wlan_init(s):
     wlan.active(True)
     wlan.connect(s.profile['wlan']['ssid'], s.profile['wlan']['pass'])
     # connect would processed in the background...
-    timeout = int(s.profile['wlan']['timeout'])
-    start = time.time()
+    timeout = time.time() + int(s.profile['wlan']['timeout'])
     while True:
         iscn = wlan.isconnected()
         stat = wlan.status()
         if iscn and stat == network.STAT_GOT_IP:
             break
-        elapsed_time = time.time() - start
-        if elapsed_time > timeout:
+        if time.time() > timeout:
             raise RuntimeError('WLAN not available; last status = %s', stat)
         s.led.on()
         time.sleep(0.2)
@@ -149,6 +147,7 @@ class ntptask(task):
 
     def init(self):
         self.warn_cputime = 700000 # report long task over this
+        self.faults = 0
 
     def task(self):
         try:
@@ -156,7 +155,12 @@ class ntptask(task):
         except Exception as e:
             logger.error('%s: %s (ntp.get)' % (e.__class__.__name__, e.value))
             epoch = 0
-        if epoch == 0: return
+        if epoch == 0:
+            self.faults += 1
+            if self.faults >= 10:
+                raise RuntimeError('no response from ntp server')
+            return
+        self.faults = 0
         epoch += 1
         if epoch != self.sequencer.clock.epoch:
             logger.warning('epoch: %s (internal) != %s (ntp)' % (self.sequencer.clock.epoch, epoch))
