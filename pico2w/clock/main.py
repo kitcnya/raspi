@@ -78,7 +78,16 @@ def wlan_init(s):
     wlan.active(True)
     wlan.connect(s.profile['wlan']['ssid'], s.profile['wlan']['pass'])
     # connect would processed in the background...
-    while not wlan.isconnected() and wlan.status() >= 0:
+    timeout = int(s.profile['wlan']['timeout'])
+    start = time.time()
+    while True:
+        iscn = wlan.isconnected()
+        stat = wlan.status()
+        if iscn and stat == network.STAT_GOT_IP:
+            break
+        elapsed_time = time.time() - start
+        if elapsed_time > timeout:
+            raise RuntimeError('WLAN not available; last status = %s', stat)
         s.led.on()
         time.sleep(0.2)
         s.led.off()
