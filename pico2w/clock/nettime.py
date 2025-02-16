@@ -12,11 +12,10 @@ logger = getLogger(__name__)
 
 class nettime(object):
 
-    def __init__(self, server, timeout = 0.5, timezone = 32400): # 32400 = 9 * 3600
-        self.ntpservers = socket.getaddrinfo(server, 123)
-        self.ntpservers = [x[-1] for x in self.ntpservers]
-        self.ntpserver = self.ntpservers[0]
-        self.index = 0
+    def __init__(self, server, servers, index = 0, timeout = 0.5, timezone = 32400): # 32400 = 9 * 3600
+        self.ntpserver = server
+        self.ntpservers = servers
+        self.index = index
         self.timeout = timeout
         self.timezone = timezone
         self.request = b'\x23' + 47 * b'\0'
@@ -26,7 +25,7 @@ class nettime(object):
         sock.settimeout(self.timeout)
         start = time.ticks_us()
         try:
-            sock.sendto(self.request, self.ntpserver)
+            sock.sendto(self.request, (self.ntpserver, 123))
             answer, src = sock.recvfrom(64)
         except Exception as e:
             logger.error('%s: %s; %s (timeout?)' % (e.__class__.__name__, e.value, str(self.ntpserver)))

@@ -96,29 +96,11 @@ def wlan_init(s):
 
 def ntp_init(s):
     server = s.profile['ntp']['server']
+    servers = s.profile['ntp']['servers']
+    index = s.profile['ntp']['index']
     timeout = s.profile['ntp']['timeout']
     timezone = s.profile['tz']['seconds']
-    w1 = morse(s)
-    w1.tone('-. ---/-. - .--./... . .-. ...- . .-.///') # no ntp server
-    n = 0
-    try:
-        ntp = nettime(server, timeout, timezone)
-    except Exception as e:
-        logger.error('%s: %s (nettime)' % (e.__class__.__name__, e.value))
-        ntp = None
-    while ntp is None:
-        n += 1
-        if n >= 10:
-            raise RuntimeError('no ntp server')
-        gc.collect()
-        w1.set_time()
-        w1.task()
-        s.run()
-        try:
-            ntp = nettime(server, timeout, timezone)
-        except Exception as e:
-            logger.error('%s: %s (nettime)' % (e.__class__.__name__, e.value))
-            ntp = None
+    ntp = nettime(server, servers, index, timeout, timezone)
     w2 = morse(s)
     w2.tone('-. - .--./--. . -/- .. -- .///') # ntp get time
     n = 0
