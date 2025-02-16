@@ -24,9 +24,10 @@ logger = getLogger(__name__)
 
 class ntpget(object):
 
-    def __init__(self, server, timeout = 0.5):
+    def __init__(self, server, timeout = 0.5, timezone = 0):
         self.ntpserver = so.getaddrinfo(server, 123)[0][-1]
         self.timeout = timeout
+        self.timezone = timezone
         self.request = b'\x23' + 47 * b'\0'
 
     def get(self):
@@ -51,7 +52,7 @@ class ntpget(object):
         epoch = ntptime - 61505152
         usec = data[11] // 4295 # convert transmit timestamp (frac) on server into usec
         ticks = time.ticks_add(start, (time.ticks_diff(end, start) // 2) - usec)
-        epoch += 9 * 3600 # UTC->JST
+        epoch += self.timezone
         return epoch, ticks
 
 def rtc_set(epoch): # localtime
@@ -60,12 +61,12 @@ def rtc_set(epoch): # localtime
     rtc.datetime((year, month, day, 0, hour, minute, second, 0))
     logger.warning('rtc: %d-%02d-%02d %02d:%02d:%02d' % (year, month, day, hour, minute, second))
 
-def rtc_json():
+def rtc_json(s):
     try:
         with open('rtc.json') as t:
             st = json.load(t)
         epoch = st['epoch']
-        epoch += 9 * 3600 # UTC->JST
+        epoch += s.profile['tz']['seconds']
         rtc_set(epoch + 1) # XXX: w/ adjust
     except Exception as e:
         logger.error('%s: %s (rtc.json)' % (e.__class__.__name__, e.value))
@@ -81,12 +82,35 @@ def get_profile(s):
     with open('profile.json') as f:
         profile = json.load(f)
     logger.info(str(profile))
+    try:
+        tz = profile['tz']
+    except:
+        tz = dict()
+        profile['tz'] = tz
+    seconds = 0
+    try:
+        tmp = int(tz['hours'])
+        seconds = tmp * 3600
+    except:
+        pass
+    try:
+        tmp = int(tz['minutes'])
+        seconds = tmp * 60
+    except:
+        pass
+    try:
+        tmp = int(tz['seconds'])
+        seconds = tmp
+    except:
+        pass
+    profile['tz']['seconds'] = seconds
+    logger.info('timezone: %s seconds' % seconds)
     return profile
 
-def wlan_init(s, profile):
+def wlan_init(s):
     wlan = network.WLAN(network.STA_IF)
     wlan.active(True)
-    wlan.connect(profile['wlan']['ssid'], profile['wlan']['pass'])
+    wlan.connect(s.profile['wlan']['ssid'], s.profile['wlan']['pass'])
     # connect would processed in the background...
     while not wlan.isconnected() and wlan.status() >= 0:
         s.led.on()
@@ -97,12 +121,15 @@ def wlan_init(s, profile):
     logger.info(str(wlan.ifconfig()))
     return wlan
 
-def ntp_init(s, profile):
+def ntp_init(s):
+    server = s.profile['ntp']['server']
+    timeout = s.profile['ntp']['timeout']
+    timezone = s.profile['tz']['seconds']
     w1 = morse(s)
     w1.tone('-. ---/-. - .--./... . .-. ...- . .-.///') # no ntp server
     n = 0
     try:
-        ntp = ntpget(profile['ntp']['server'], profile['ntp']['timeout'])
+        ntp = ntpget(server, timeout, timezone)
     except Exception as e:
         logger.error('%s: %s (ntp)' % (e.__class__.__name__, e.value))
         ntp = None
@@ -115,7 +142,7 @@ def ntp_init(s, profile):
         w1.task()
         s.run()
         try:
-            ntp = ntpget(profile['ntp']['server'], profile['ntp']['timeout'])
+            ntp = ntpget(server, timeout, timezone)
         except Exception as e:
             logger.error('%s: %s (ntp)' % (e.__class__.__name__, e.value))
             ntp = None
@@ -144,6 +171,9 @@ def ntp_init(s, profile):
     return ntp, epoch, ticks
 
 class ntptask(task):
+
+    def init(self):
+        self.warn_cputime = 700000 # report long task over this
 
     def task(self):
         try:
@@ -192,14 +222,14 @@ class clock(task):
         self.set_alarm(self, 1000000)
 
 def main():
-    rtc_json()
     s = sequencer()
     s.led = led()
     s.clock = clock(s)
+    s.profile = get_profile(s)
+    rtc_json(s)
     greeting(s)
-    profile = get_profile(s)
-    wlan = wlan_init(s, profile)
-    (s.ntp, s.clock.epoch, s.clock.ticks) = ntp_init(s, profile)
+    wlan = wlan_init(s)
+    (s.ntp, s.clock.epoch, s.clock.ticks) = ntp_init(s)
 
     s.clock.setup()
     s.run()
