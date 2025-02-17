@@ -168,7 +168,7 @@ class clock(task):
         self.epoch += 2
         self.set_time(self.ticks)
         self.set_alarm(self, 2000000)
-        logger.info('clock will start afater two seconds.')
+        logger.info('clock will start after two seconds.')
 
     def task(self):
         self.sequencer.led.on()
