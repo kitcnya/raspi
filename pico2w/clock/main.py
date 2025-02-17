@@ -98,9 +98,10 @@ def ntp_init(s):
     server = s.profile['ntp']['server']
     servers = s.profile['ntp']['servers']
     index = s.profile['ntp']['index']
+    offset = s.profile['ntp']['offset']
     timeout = s.profile['ntp']['timeout']
     timezone = s.profile['tz']['seconds']
-    ntp = nettime(server, servers, index, timeout, timezone)
+    ntp = nettime(server, servers, index, offset, timeout, timezone)
     w2 = morse(s)
     w2.tone('-. - .--./--. . -/- .. -- .///') # ntp get time
     n = 0
@@ -129,7 +130,7 @@ def ntp_init(s):
 class ntptask(task):
 
     def init(self):
-        self.warn_cputime = 700000 # report long task over this
+        #self.warn_cputime = 700000 # report long task over this
         self.faults = 0
 
     def task(self):
@@ -142,15 +143,18 @@ class ntptask(task):
             self.faults += 1
             if self.faults >= 10:
                 raise RuntimeError('no response from ntp server')
-            return
-        self.faults = 0
-        epoch += 1
-        if epoch != self.sequencer.clock.epoch:
-            logger.warning('epoch: %s (internal) != %s (ntp)' % (self.sequencer.clock.epoch, epoch))
-            self.sequencer.clock.epoch = epoch
-        d = time.ticks_diff(ticks, self.sequencer.clock.ticks)
-        logger.warning('ticks: %s (internal - ntp) %s' % (d, str(self.sequencer.ntp.ntpserver)))
-        self.sequencer.clock.set_time(ticks, 1000000)
+        else:
+            self.faults = 0
+            if epoch != self.sequencer.clock.epoch:
+                #logger.warning('epoch: %s (internal) != %s (ntp)' % (self.sequencer.clock.epoch, epoch))
+                d = epoch - self.sequencer.clock.epoch
+                self.sequencer.clock.epoch = epoch
+                self.sequencer.clock.ticks = time.ticks_add(self.sequencer.clock.ticks, d * 1000000)
+            d = time.ticks_diff(self.sequencer.clock.ticks, ticks)
+            logger.warning('ticks: %s (internal - ntp) %s' % (d, str(self.sequencer.ntp.ntpserver)))
+            self.sequencer.clock.set_time(ticks)
+        self.sequencer.clock.epoch += 1
+        self.sequencer.clock.set_alarm(self.sequencer.clock, 1000000)
 
 class clock(task):
 
@@ -169,7 +173,7 @@ class clock(task):
     def task(self):
         self.sequencer.led.on()
         (year, month, day, hour, minute, second, weekday, yearday) = time.gmtime(self.epoch)
-        if second == 0:
+        if second % 10 == 0:
             self.off.set_alarm(self, 100000)
             self.on2.set_alarm(self, 200000)
             self.off2.set_alarm(self, 300000)
@@ -178,6 +182,7 @@ class clock(task):
             if second == 2 and minute % 10 == 2:
                 self.ticks = self._alarm
                 self.ntp.set_alarm(self, 160000)
+                return
             elif second % 10 == 8:
                 gc.collect()
         self.epoch += 1
